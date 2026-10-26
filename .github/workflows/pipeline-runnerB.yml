@@ -1,0 +1,59 @@
+# Pipeline B — everything on GitHub-hosted runners; deploy remotely using a
+# kubeconfig stored as a secret. Nothing is installed on the EC2 except K3s.
+name: pipeline-B
+on:
+  workflow_dispatch:                   # manual, so A and B don't both run
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPO: php-todo
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
+    outputs:
+      image: ${{ steps.out.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: echo "version=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
+          build-args: APP_VERSION=${{ steps.ver.outputs.version }}
+      - uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
+          only-severities: critical,high
+          exit-code: true
+      - run: docker push ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
+      - id: out
+        run: echo "image=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write kubeconfig from secret
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+      - name: Deploy
+        env:
+          IMAGE: ${{ needs.build-scan-push.outputs.image }}
+          HOST: ${{ vars.APP_HOST }}
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          sed -e "s#__IMAGE__#${IMAGE}#g" -e "s#__HOST__#${HOST}#g" k8s/deployment.yaml | kubectl apply -f -
+          kubectl -n todo rollout status deploy/todo --timeout=120s
