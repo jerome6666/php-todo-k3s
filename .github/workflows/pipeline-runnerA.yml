@@ -63,7 +63,7 @@ jobs:
         env:
           IMAGE: ${{ needs.build-scan-push.outputs.image }}
           HOST: ${{ vars.APP_HOST }}
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+          KUBECONFIG: /home/ubuntu/.kube/config
         run: |
           kubectl apply -f k8s/namespace.yaml
           sed -e "s#__IMAGE__#${IMAGE}#g" -e "s#__HOST__#${HOST}#g" k8s/deployment.yaml | kubectl apply -f -
