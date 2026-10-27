@@ -46,13 +46,6 @@ jobs:
           tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
           build-args: APP_VERSION=${{ steps.ver.outputs.version }}
 
-      - name: Scan image with Docker Scout
-        uses: docker/scout-action@v1
-        with:
-          command: cves
-          image: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
-          only-severities: critical,high
-          exit-code: false
 
       - name: Push to ECR
         run: docker push ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.ver.outputs.version }}
