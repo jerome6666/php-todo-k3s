@@ -14,7 +14,10 @@ spec:
     metadata:
       labels: { app: todo }
     spec:
-      containers:
+      imagePullSecrets:
+        - name: ecr-secret
+        
+      containers:        
         - name: todo
           # CI replaces __IMAGE__ with the ECR image:tag during deploy.
           image: __IMAGE__
