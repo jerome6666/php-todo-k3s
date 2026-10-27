@@ -65,6 +65,7 @@ jobs:
           HOST: ${{ vars.APP_HOST }}
           KUBECONFIG: /home/ubuntu/.kube/config
         run: |
+          export KUBECONFIG=/home/ubuntu/.kube/config
           kubectl apply -f k8s/namespace.yaml
           sed -e "s#__IMAGE__#${IMAGE}#g" -e "s#__HOST__#${HOST}#g" k8s/deployment.yaml | kubectl apply -f -
           kubectl -n todo rollout status deploy/todo --timeout=120s
